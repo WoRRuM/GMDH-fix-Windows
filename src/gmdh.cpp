@@ -430,21 +430,31 @@ std::string&& getVariableName(std::string&& cppName, std::string&& pyName) {
 }
 
 PairMVXd timeSeriesTransformation(const VectorXd& timeSeries, int lags) {
-    std::string errorMsg = "";
-    if (timeSeries.size() == 0)
-        errorMsg = getVariableName("timeSeries", "time_series") + " value is empty";
-    else if (lags <= 0)
-        errorMsg = "lags value must be a positive integer";
-    else if (lags >= timeSeries.size())
-        errorMsg = "lags value can't be greater than " + getVariableName("timeSeries", "time_series") + " size";
-    if (errorMsg != "")
-        throw std::invalid_argument(errorMsg);
-            
-    VectorXd yTimeSeries{ timeSeries.tail(timeSeries.size() - lags) };
-    MatrixXd xTimeSeries{ timeSeries.size() - lags, lags };
-    for (auto i = 0; i < timeSeries.size() - lags; ++i)
-        xTimeSeries.row(i) = timeSeries.segment(i, lags);
-    return { std::move(xTimeSeries), std::move(yTimeSeries) };
+    try {
+        std::string errorMsg = "";
+        if (timeSeries.size() == 0)
+            errorMsg = getVariableName("timeSeries", "time_series") + " value is empty";
+        else if (lags <= 0)
+            errorMsg = "lags value must be a positive integer";
+        else if (lags >= timeSeries.size())
+            errorMsg = "lags value can't be greater than " + getVariableName("timeSeries", "time_series") + " size";
+        if (errorMsg != "")
+            throw std::invalid_argument(errorMsg);
+
+        // Make sure we're creating deep copies
+        VectorXd yTimeSeries = timeSeries.tail(timeSeries.size() - lags);
+        MatrixXd xTimeSeries(timeSeries.size() - lags, lags);
+
+        // More cautious iteration
+        for (Eigen::Index i = 0; i < timeSeries.size() - lags; ++i) {
+            xTimeSeries.row(i) = timeSeries.segment(i, lags);
+        }
+
+        return { xTimeSeries, yTimeSeries };  // Return without move for safety
+    } catch (const std::exception& e) {
+        // Better error handling
+        throw std::runtime_error(std::string("Error in timeSeriesTransformation: ") + e.what());
+    }
 }
 
 SplittedData GmdhModel::internalSplitData(const MatrixXd& x, const VectorXd& y, double testSize, bool addOnesCol) {
